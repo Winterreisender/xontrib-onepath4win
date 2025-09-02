@@ -1,7 +1,8 @@
 """Associate files and directories with app or alias and run it without preceding commands in xonsh shell. """
 
 import os, shlex
-from magic import from_file as mime
+if not __xonsh__.env.get('XONTRIB_ONEPATH_SUBPROC_FILE', False):
+    from magic import from_file as mime
 from pathlib import Path
 from shutil import which
 from pprint import pprint
