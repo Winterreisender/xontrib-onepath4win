@@ -1,3 +1,11 @@
+# Todo
+
+1. `cmds += ['2>', '/dev/null']` not work in Windows
+2. `Shebang -> XFILE` not work in Windows
+
+
+
+
 <p align="center">
 When you click to a file or folder in graphical OS they will be opened in associated app. The xontrib-onepath brings the same logic to the <a href="https://github.com/xonsh/xonsh/">xonsh shell</a>. Type the filename or path without preceding command and an associated action will be executed. The actions are customizable.
 </p>
