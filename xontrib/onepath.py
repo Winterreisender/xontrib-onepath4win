@@ -12,12 +12,14 @@ else:
     import shlex
 
 # All ENV should be set before loading, and this will make code more clear
-SUBPROC_FILE = __xonsh__.env.get('XONTRIB_ONEPATH_SUBPROC_FILE', True) # In windows, file.exe can be easily installed while python-magic is a little difficult
-DEBUG        = __xonsh__.env.get('XONTRIB_ONEPATH_DEBUG', True)
-ACTIONS      = __xonsh__.env.get('XONTRIB_ONEPATH_ACTIONS', {
-                                    '<DIR>': 'cd',
-                                    '<XFILE>': '<RUN>',
-                                })
+SUBPROC_FILE   = __xonsh__.env.get('XONTRIB_ONEPATH_SUBPROC_FILE', True) # In windows, file.exe can be easily installed while python-magic is a little difficult
+DEBUG          = __xonsh__.env.get('XONTRIB_ONEPATH_DEBUG', True)
+ACTIONS        = __xonsh__.env.get('XONTRIB_ONEPATH_ACTIONS', {
+                                        '<DIR>': 'cd',
+                                        '<XFILE>': '<RUN>',
+                                        '.xsh': 'xonsh'
+                                    })
+SEARCH_IN_PATH = __xonsh__.env.get('XONTRIB_ONEPATH_SEARCH_IN_PATH', True)
 
 
 def _get_subproc_output(cmds):
@@ -29,7 +31,7 @@ def _get_subproc_output(cmds):
     return result.output
 
 def mime(path :Path):
-    file_type = _get_subproc_output(['file', '--mime-type', '--brief', path], DEBUG).strip()
+    file_type = _get_subproc_output(['file', '--mime-type', '--brief', path]).strip()
     return file_type
     # import magic
     # if SUBPROC_FILE:
@@ -45,7 +47,7 @@ def _is_executable(path):
         return False
     if ON_WINDOWS:
         pathext = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(";")
-        return path.ext in pathext
+        return path.suffix in pathext
     else:
         return os.access(path, os.X_OK)
 
@@ -54,7 +56,7 @@ def parse_action(file_types :dict, actions :dict = ACTIONS):
     for k in actions:
         for name, tp in file_types.items():
             if k == tp:
-                action = __xonsh__.env['XONTRIB_ONEPATH_ACTIONS'][k]
+                action = actions[k]
                 logging.debug(f'xontrib-onepath: selected action name={repr(name)}, type={repr(k)}, action={repr(action)}')            
                 break
         if action:
@@ -65,18 +67,31 @@ def _onepath(cmd, **kw):
     try:
         args = shlex.split(cmd)
     except:
-        logging.debug(f"shlex.split/mslex.split failed")
-        return cmd
+        logging.debug("shlex.split/mslex.split failed")
+        return None
     logging.debug(f"shlex.split/mslex.split success: {args=}")
-    if len(args) != 1 or which(args[0]) or args[0] in aliases:
-        logging.debug(f"failed to find file: {len(args)=} {which(args[0])=} ")
-        return cmd
 
-    path = Path(args[0]).expanduser().resolve()
+    if len(args) != 1:
+        logging.debug(f"{len(args)=} != 1, exiting")
+        return None
+
+    if args[0] in aliases:
+        logging.debug("detected in alias, exiting")
+        return None
+    
+    path = Path(args[0]).expanduser()
     logging.debug(f"onepath is {path}")
+
+    if not path.is_absolute() and args[0][0] != '.':
+        if SEARCH_IN_PATH and which(args[0]):
+            path = Path(which(args[0])).expanduser()
+        else:
+            return None
+    
+    path = path.resolve()
     if not path.exists():
         logging.debug(f"{path} no exist! exiting")
-        return cmd
+        return None
 
     file_type=mime(path)
 
@@ -103,7 +118,7 @@ def _onepath(cmd, **kw):
         else:
             return f'{action} {shlex.quote(str(path))}\n'
     else:
-        return cmd
+        return None
 
 
 @events.on_transform_command
@@ -116,7 +131,7 @@ def onepath(cmd, **kw):
     logging.debug(f"\n{cmd=}")
     result = _onepath(cmd, **kw)
     logging.debug(f"{result=}")
-    return result
+    return result if result is not None else cmd
 
 # When XONTRIB_ONEPATH_SUBPROC_FILE is True, import should not happen to avoid import issues
 # Use os.devnull to work in both Linux (/dev/null) and Windows (NUL)
