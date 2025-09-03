@@ -6,6 +6,7 @@ if not __xonsh__.env.get('XONTRIB_ONEPATH_SUBPROC_FILE', False):
 from pathlib import Path
 from shutil import which
 from pprint import pprint
+from xonsh.platform import ON_WINDOWS
 
 _env_actions = __xonsh__.env.get('XONTRIB_ONEPATH_ACTIONS')
 if not _env_actions or type(_env_actions) != dict:
@@ -17,11 +18,20 @@ if not _env_actions or type(_env_actions) != dict:
 
 def _get_subproc_output(cmds, debug=False):
     cmds = [str(c) for c in cmds]
-    if not debug:
-        cmds += ['2>', '/dev/null']
+    if not debug and not ON_WINDOWS:
+        cmds += ['2>', os.devnull]
     result = __xonsh__.subproc_captured_object(cmds)
     result.rtn  # workaround https://github.com/xonsh/xonsh/issues/3394
     return result.output
+
+def _is_executable(path):
+    if not path.is_file():
+        return False
+    if ON_WINDOWS:
+        pathext = os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").lower().split(";")
+        return path.ext in pathext
+    else:
+        return os.access(path, os.X_OK)
 
 
 @events.on_transform_command
@@ -55,7 +65,7 @@ def onepath(cmd, **kw):
         'file_type': '<DIR>' if file_type == 'inode/directory' else file_type,
         'file_type_group': file_type.split('/')[0] + '/' if '/' in file_type else None,
         'file_or_dir': '<FILE>' if path.is_file() else '<DIR>',
-        'xfile': '<XFILE>' if path.is_file() and os.access(path, os.X_OK) else '<NX>',
+        'xfile': '<XFILE>' if _is_executable(path) else '<NX>',
         'any': '*'
     }
     
@@ -74,11 +84,19 @@ def onepath(cmd, **kw):
         if action:
             break
 
-
     if action:
         if action == '<RUN>':
             return f'{shlex.quote(str(path))}\n'
         else:
-            return f'{action} {shlex.quote(str(path))}\n'
+            if ON_WINDOWS:
+                return f'{action} r{shlex.quote(str(path))}\n'
+            else:
+                return f'{action} {shlex.quote(str(path))}\n'
     else:
         return cmd
+
+# When XONTRIB_ONEPATH_SUBPROC_FILE is True, import should not happen to avoid import issues
+# Use os.devnull to work in both Linux (/dev/null) and Windows (NUL)
+# Windows use `\` for path, shlex.quote could not escape it correctly. As https://docs.python.org/3/library/shlex.html says, "Warning The shlex module is only designed for Unix shells. The quote() function is not guaranteed to be correct on non-POSIX compliant shells or shells from other operating systems such as Windows. Executing commands quoted by this module on such shells can open up the possibility of a command injection vulnerability."
+# adding r'' is a little trick and it may broke other commands, may be mslex is a better option
+# X_OK is always True whether it's executable
