@@ -1,8 +1,13 @@
 # Todo
 
-1. `cmds += ['2>', '/dev/null']` not work in Windows
-2. `Shebang -> XFILE` not work in Windows
+This project aims to improve onepath for a better windows experience
 
+1. [x] `cmds += ['2>', '/dev/null']` not work in Windows
+2. [x]`Shebang -> XFILE` not work in Windows
+3. Search-in-path-with-suffix
+
+
+---
 
 
 
